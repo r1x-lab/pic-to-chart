@@ -37,6 +37,33 @@ export function extendToRange(pts, xMin, xMax, transform) {
   return [...left, ...sorted, ...right]
 }
 
+// Remove outlier points whose py deviates too far from their local median.
+// Uses an adaptive threshold (8% of the total py range, min 10px) so it
+// scales automatically whether the chart is tall or short.
+// windowHalf controls how many neighbours on each side define the "local" median.
+export function removeOutliers(pts, windowHalf = 12) {
+  if (pts.length < 5) return pts
+  const s = [...pts].sort((a, b) => a.px - b.px)
+  const pyVals = s.map(p => p.py)
+  const pyMin  = Math.min(...pyVals)
+  const pyMax  = Math.max(...pyVals)
+  const threshold = Math.max(10, (pyMax - pyMin) * 0.08)
+
+  return s.filter((p, i) => {
+    const lo  = Math.max(0, i - windowHalf)
+    const hi  = Math.min(s.length - 1, i + windowHalf)
+    const win = s.slice(lo, hi + 1).map(q => q.py)
+    const med = medianOf(win)
+    return Math.abs(p.py - med) <= threshold
+  })
+}
+
+function medianOf(arr) {
+  const s = [...arr].sort((a, b) => a - b)
+  const m = Math.floor(s.length / 2)
+  return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m]
+}
+
 // Fill pixel-column gaps between traced points with linear interpolation.
 // Ensures every integer px between the first and last detected point has a data point,
 // so the user can drag anywhere — not just at detected color columns.

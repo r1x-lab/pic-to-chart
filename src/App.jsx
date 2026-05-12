@@ -8,7 +8,7 @@ import EditPanel from './components/EditPanel'
 import ExportPanel from './components/ExportPanel'
 import AdvancedPanel from './components/AdvancedPanel'
 import { makeTransform, isCalibrationComplete } from './lib/transform'
-import { traceCurve, fillGaps, extendToRange, removeGridLines, sampleColor, rgbToHex } from './lib/image'
+import { traceCurve, fillGaps, extendToRange, removeOutliers, removeGridLines, sampleColor, rgbToHex } from './lib/image'
 import { ocrStrip } from './lib/ocr'
 import { pchipInterp, savitzkyGolay } from './lib/math'
 import { downloadJson, deserializeProject } from './lib/project'
@@ -200,7 +200,8 @@ export default function App() {
     const c = curves[activeCurveIdx]
     const raw = traceCurve(imgData, imgData.width, imgData.height, c.color, tolerance,
       { xMin, xMax, yMin, yMax }, t)
-    const extended = extendToRange(raw, xMin, xMax, t)
+    const cleaned = removeOutliers(raw)
+    const extended = extendToRange(cleaned, xMin, xMax, t)
     const pts = fillGaps(extended)
     // origPts keeps the auto-trace snapshot for ghost overlay reference
     updateCurve(activeCurveIdx, { pts, origPts: pts.map(p => ({ ...p })) })
