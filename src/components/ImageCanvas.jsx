@@ -12,6 +12,9 @@ export default function ImageCanvas({
   activeCurveIdx,
   onCanvasClick,
   onUpdateCurve,
+  onDragStart,
+  onUndo,
+  canUndo = false,
   brushRadius = 5,
   weightKind = 'gaussian',
   cursorMode,
@@ -229,6 +232,7 @@ export default function ImageCanvas({
     const hit = findNearest(x, y)
     if (!hit) return
     e.preventDefault()
+    onDragStart?.()
 
     const curve  = curves[hit.ci]
     const startPts = curve.pts.map(p => ({ ...p }))
@@ -319,11 +323,21 @@ export default function ImageCanvas({
     <div className="bg-white border border-gray-200 rounded-lg p-2">
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-1.5 px-1">
-        <span className="text-xs text-gray-500">
-          {calComplete
-            ? `在圖片上直接拖曳點位調整（筆刷半徑 ${brushRadius}）`
-            : '請先完成座標軸校準'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">
+            {calComplete
+              ? `在圖片上直接拖曳點位調整（筆刷半徑 ${brushRadius}）`
+              : '請先完成座標軸校準'}
+          </span>
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="復原 (Ctrl+Z)"
+            className="text-xs px-2 py-0.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            ↩ 復原
+          </button>
+        </div>
         {hasOriginal && (
           <button
             onClick={() => setShowOriginal(v => !v)}

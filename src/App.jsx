@@ -41,6 +41,10 @@ export default function App() {
   const [activeCurveIdx, setActiveCurveIdx] = useState(0)
   const [tolerance, setTolerance] = useState(55)
 
+  // Undo history — each entry is a deep copy of curves at a point in time
+  const [history, setHistory] = useState([])
+  const canUndo = history.length > 0
+
   // Edit
   const [brushRadius, setBrushRadius] = useState(5)
   const [weightKind, setWeightKind] = useState('gaussian')
@@ -59,6 +63,18 @@ export default function App() {
   const fileInputRef = useRef(null)
 
   const calibrationReady = isCalibrationComplete(cal)
+
+  // Global Ctrl+Z / Cmd+Z undo
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo])
 
   // ---------- Image loading ----------
   const loadImageFromFile = (file) => {
@@ -144,12 +160,36 @@ export default function App() {
   const updateCurve = (i, patch) => {
     setCurves(prev => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c))
   }
+  // Save current curves snapshot to history (max 50 steps)
+  const pushHistory = useCallback(() => {
+    setCurves(prev => {
+      setHistory(h => [
+        ...h.slice(-49),
+        prev.map(c => ({
+          ...c,
+          pts: c.pts.map(p => ({ ...p })),
+          origPts: c.origPts?.map(p => ({ ...p }))
+        }))
+      ])
+      return prev
+    })
+  }, [])
+
+  const undo = useCallback(() => {
+    setHistory(prev => {
+      if (!prev.length) return prev
+      setCurves(prev[prev.length - 1])
+      return prev.slice(0, -1)
+    })
+  }, [])
+
   const updateCurvePts = useCallback((i, pts) => {
     setCurves(prev => prev.map((c, idx) => idx === i ? { ...c, pts } : c))
   }, [])
 
   const traceActive = () => {
     if (!imgData || !calibrationReady) return
+    pushHistory()
     const t = makeTransform(cal, xScale)
     const xMin = Math.min(cal.x1.px, cal.x2.px)
     const xMax = Math.max(cal.x1.px, cal.x2.px)
@@ -164,11 +204,12 @@ export default function App() {
     updateCurve(activeCurveIdx, { pts, origPts: pts.map(p => ({ ...p })) })
   }
 
-  const clearActivePts = () => updateCurve(activeCurveIdx, { pts: [] })
+  const clearActivePts = () => { pushHistory(); updateCurve(activeCurveIdx, { pts: [] }) }
 
   const fillActivePtsGaps = () => {
     const c = curves[activeCurveIdx]
     if (!c.pts.length) return
+    pushHistory()
     const filled = fillGaps(c.pts)
     updateCurve(activeCurveIdx, {
       pts: filled,
@@ -180,6 +221,7 @@ export default function App() {
   const applySmoothing = () => {
     const c = curves[activeCurveIdx]
     if (!c.pts.length || !smoothWindow) return
+    pushHistory()
     const sorted = [...c.pts].sort((a, b) => a.x - b.x)
     const ys = sorted.map(p => p.y)
     const smoothed = savitzkyGolay(ys, smoothWindow)
@@ -362,6 +404,9 @@ export default function App() {
             activeCurveIdx={activeCurveIdx}
             onCanvasClick={handleCanvasClick}
             onUpdateCurve={updateCurvePts}
+            onDragStart={pushHistory}
+            onUndo={undo}
+            canUndo={canUndo}
             brushRadius={brushRadius}
             weightKind={weightKind}
             cursorMode={pickMode}

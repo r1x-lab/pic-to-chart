@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 
-// Local-state input: lets the user type freely (including '-', '3.', '-0.')
-// and only propagates a parsed number to the parent when the value is valid.
-// On blur, if the text is not a valid number it reverts to the last known value.
-function NumInput({ value, onChange, placeholder, className }) {
-  const [text, setText] = useState(value != null && !isNaN(value) ? String(value) : '')
+// All sub-components defined at module scope so their references are stable
+// across re-renders — prevents React from unmounting/remounting them and
+// losing keyboard focus mid-typing.
 
-  // Sync display when parent value changes from outside (e.g. pixel-pick sets it)
+function NumInput({ value, onChange, placeholder, className }) {
+  const [text, setText] = useState(
+    value != null && !isNaN(value) ? String(value) : ''
+  )
+
+  // Sync when parent updates the value from outside (e.g. pixel-pick sets it)
   useEffect(() => {
     if (value != null && !isNaN(value)) setText(String(value))
   }, [value])
@@ -26,7 +29,6 @@ function NumInput({ value, onChange, placeholder, className }) {
       onBlur={() => {
         const n = parseFloat(text)
         if (isNaN(n)) {
-          // restore to last valid parent value
           setText(value != null && !isNaN(value) ? String(value) : '')
         } else {
           setText(String(n))
@@ -35,6 +37,90 @@ function NumInput({ value, onChange, placeholder, className }) {
       }}
       className={className}
     />
+  )
+}
+
+function PxInput({ label, value, onChange }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-[10px] text-gray-400 w-3 shrink-0">{label}</span>
+      <input
+        type="number"
+        step="1"
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        className="w-full px-1.5 py-0.5 text-xs font-mono border border-gray-200 rounded outline-none focus:border-blue-400 bg-gray-50"
+      />
+    </div>
+  )
+}
+
+function CalField({ k, cal, onUpdateCalValue, onUpdateCalPixel, onStartCalPick, activePickMode }) {
+  const isX = k.startsWith('x')
+  const placeholders = { x1: '2000', x2: '8000', y1: '0', y2: '11' }
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="text-xs text-gray-500 font-medium">{k.toUpperCase()} 值</label>
+        {cal[k] && <span className="text-[10px] text-green-600">✓</span>}
+      </div>
+      <div className="flex gap-1">
+        <NumInput
+          value={cal[k]?.val}
+          onChange={n => onUpdateCalValue(k, n)}
+          placeholder={placeholders[k]}
+          className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+        />
+        <button
+          onClick={() => onStartCalPick(k)}
+          className={`px-2 py-1.5 text-xs rounded border shrink-0 ${
+            activePickMode === `cal-${k}`
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          點選
+        </button>
+      </div>
+
+      {cal[k] && (
+        <div className={`rounded p-1.5 space-y-1 border ${
+          isX ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'
+        }`}>
+          <div className={`text-[10px] font-medium mb-0.5 ${isX ? 'text-red-500' : 'text-blue-500'}`}>
+            像素位置
+          </div>
+          <PxInput
+            label="X"
+            value={Math.round(cal[k].px ?? 0)}
+            onChange={v => onUpdateCalPixel(k, 'px', v)}
+          />
+          <PxInput
+            label="Y"
+            value={Math.round(cal[k].py ?? 0)}
+            onChange={v => onUpdateCalPixel(k, 'py', v)}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CalRow({ k1, k2, cal, onUpdateCalValue, onUpdateCalPixel, onStartCalPick, activePickMode }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 mb-3">
+      {[k1, k2].map(k => (
+        <CalField
+          key={k}
+          k={k}
+          cal={cal}
+          onUpdateCalValue={onUpdateCalValue}
+          onUpdateCalPixel={onUpdateCalPixel}
+          onStartCalPick={onStartCalPick}
+          activePickMode={activePickMode}
+        />
+      ))}
+    </div>
   )
 }
 
@@ -48,75 +134,7 @@ export default function CalibrationPanel({
   activePickMode
 }) {
   const setCount = ['x1', 'x2', 'y1', 'y2'].filter(k => cal[k]).length
-
-  const PxInput = ({ label, value, onChange }) => (
-    <div className="flex items-center gap-1">
-      <span className="text-[10px] text-gray-400 w-3 shrink-0">{label}</span>
-      <input
-        type="number"
-        step="1"
-        value={value ?? ''}
-        onChange={e => onChange(e.target.value)}
-        className="w-full px-1.5 py-0.5 text-xs font-mono border border-gray-200 rounded outline-none focus:border-blue-400 bg-gray-50"
-      />
-    </div>
-  )
-
-  const CalRow = ({ k1, k2 }) => (
-    <div className="grid grid-cols-2 gap-2 mb-3">
-      {[k1, k2].map(k => {
-        const isX = k.startsWith('x')
-        return (
-          <div key={k} className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-gray-500 font-medium">{k.toUpperCase()} 值</label>
-              {cal[k] && <span className="text-[10px] text-green-600">✓</span>}
-            </div>
-            <div className="flex gap-1">
-              <NumInput
-                value={cal[k]?.val}
-                onChange={n => onUpdateCalValue(k, n)}
-                placeholder={k === 'x1' ? '2000' : k === 'x2' ? '8000' : k === 'y1' ? '0' : '11'}
-                className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-              />
-              <button
-                onClick={() => onStartCalPick(k)}
-                className={`px-2 py-1.5 text-xs rounded border shrink-0 ${
-                  activePickMode === `cal-${k}`
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                點選
-              </button>
-            </div>
-
-            {cal[k] && (
-              <div
-                className={`rounded p-1.5 space-y-1 border ${
-                  isX ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'
-                }`}
-              >
-                <div className={`text-[10px] font-medium mb-0.5 ${isX ? 'text-red-500' : 'text-blue-500'}`}>
-                  像素位置
-                </div>
-                <PxInput
-                  label="X"
-                  value={Math.round(cal[k].px ?? 0)}
-                  onChange={v => onUpdateCalPixel(k, 'px', v)}
-                />
-                <PxInput
-                  label="Y"
-                  value={Math.round(cal[k].py ?? 0)}
-                  onChange={v => onUpdateCalPixel(k, 'py', v)}
-                />
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
+  const rowProps = { cal, onUpdateCalValue, onUpdateCalPixel, onStartCalPick, activePickMode }
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -132,10 +150,7 @@ export default function CalibrationPanel({
       <div className="mb-3">
         <label className="text-xs text-gray-500 font-medium block mb-1">X 軸刻度</label>
         <div className="flex gap-1">
-          {[
-            { k: 'linear', label: '線性' },
-            { k: 'log',    label: '對數' }
-          ].map(s => (
+          {[{ k: 'linear', label: '線性' }, { k: 'log', label: '對數' }].map(s => (
             <button
               key={s.k}
               onClick={() => onSetXScale(s.k)}
@@ -151,11 +166,11 @@ export default function CalibrationPanel({
         </div>
       </div>
 
-      <CalRow k1="x1" k2="x2" />
-      <CalRow k1="y1" k2="y2" />
+      <CalRow k1="x1" k2="x2" {...rowProps} />
+      <CalRow k1="y1" k2="y2" {...rowProps} />
 
       <p className="text-[11px] text-gray-500 leading-relaxed">
-        先輸入數值（支援負數），再點「<span className="font-medium">點選</span>」並在圖上點擊對應位置。點擊後可在「像素位置」欄手動微調 X/Y 像素座標。
+        先輸入數值（支援負數），再點「<span className="font-medium">點選</span>」並在圖上點擊對應位置。
       </p>
     </div>
   )
