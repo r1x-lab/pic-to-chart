@@ -21,14 +21,12 @@ export default function ImageCanvas({
   maxWidth = 880
 }) {
   const canvasRef = useRef(null)
-  const [showOriginal, setShowOriginal] = useState(true)
   const [drag, setDrag] = useState(null)
   const [hoverPt, setHoverPt] = useState(null)
   const [mousePos, setMousePos] = useState(null) // canvas coords for crosshair
   const [colorSwatch, setColorSwatch] = useState(null) // { hex, domX, domY } during pick-color
 
   const calComplete = isCalibrationComplete(cal)
-  const hasOriginal = curves.some(c => c.origPts?.length)
 
   // ── DRAW ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -72,22 +70,7 @@ export default function ImageCanvas({
       if (!c.visible) return
       const isActive = ci === activeCurveIdx
 
-      // Original ghost (dashed, semi-transparent)
-      if (showOriginal && c.origPts?.length) {
-        ctx.save()
-        ctx.strokeStyle = c.color
-        ctx.lineWidth = 1.5
-        ctx.globalAlpha = 0.35
-        ctx.setLineDash([5, 5])
-        ctx.beginPath()
-        c.origPts.forEach((p, i) => {
-          i === 0 ? ctx.moveTo(p.px, p.py) : ctx.lineTo(p.px, p.py)
-        })
-        ctx.stroke()
-        ctx.restore()
-      }
-
-      // Current editable curve — always red so it stands out over the original ghost
+      // Current editable curve
       if (c.pts.length) {
         ctx.save()
         ctx.strokeStyle = '#ef4444'
@@ -197,7 +180,7 @@ export default function ImageCanvas({
       ctx.stroke()
       ctx.restore()
     }
-  }, [imgEl, imgData, cal, curves, activeCurveIdx, showOriginal, hoverPt, mousePos, cursorMode, maxWidth])
+  }, [imgEl, imgData, cal, curves, activeCurveIdx, hoverPt, mousePos, cursorMode, maxWidth])
 
   // ── COORDS ────────────────────────────────────────────────────
   // Returns canvas-pixel coordinates (pt.px/pt.py space)
@@ -322,34 +305,20 @@ export default function ImageCanvas({
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-2">
       {/* Toolbar */}
-      <div className="flex items-center justify-between mb-1.5 px-1">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">
-            {calComplete
-              ? `在圖片上直接拖曳點位調整（筆刷半徑 ${brushRadius}）`
-              : '請先完成座標軸校準'}
-          </span>
-          <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            title="復原 (Ctrl+Z)"
-            className="text-xs px-2 py-0.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            ↩ 復原
-          </button>
-        </div>
-        {hasOriginal && (
-          <button
-            onClick={() => setShowOriginal(v => !v)}
-            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
-              showOriginal
-                ? 'bg-orange-50 text-orange-700 border-orange-300'
-                : 'border-gray-300 text-gray-400 hover:bg-gray-50'
-            }`}
-          >
-            {showOriginal ? '● 原始追蹤 顯示中' : '○ 原始追蹤 已隱藏'}
-          </button>
-        )}
+      <div className="flex items-center gap-2 mb-1.5 px-1">
+        <span className="text-xs text-gray-500 flex-1">
+          {calComplete
+            ? `在圖片上直接拖曳點位調整（筆刷半徑 ${brushRadius}）`
+            : '請先完成座標軸校準'}
+        </span>
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="復原 (Ctrl+Z)"
+          className="text-xs px-2 py-0.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          ↩ 復原
+        </button>
       </div>
 
       {/* Canvas wrapper — relative so the swatch overlay can be absolutely positioned */}

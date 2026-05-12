@@ -61,20 +61,11 @@ export default function App() {
   const [ocrResults, setOcrResults] = useState(null)
 
   const fileInputRef = useRef(null)
+  // Always-current ref so pushHistory can snapshot without needing curves as a dep
+  const curvesRef = useRef(curves)
+  curvesRef.current = curves
 
   const calibrationReady = isCalibrationComplete(cal)
-
-  // Global Ctrl+Z / Cmd+Z undo
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault()
-        undo()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo])
 
   // ---------- Image loading ----------
   const loadImageFromFile = (file) => {
@@ -160,28 +151,39 @@ export default function App() {
   const updateCurve = (i, patch) => {
     setCurves(prev => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c))
   }
-  // Save current curves snapshot to history (max 50 steps)
+  // Save current curves snapshot to history (max 50 steps).
+  // Uses curvesRef so the callback never needs curves as a dep.
   const pushHistory = useCallback(() => {
-    setCurves(prev => {
-      setHistory(h => [
-        ...h.slice(-49),
-        prev.map(c => ({
-          ...c,
-          pts: c.pts.map(p => ({ ...p })),
-          origPts: c.origPts?.map(p => ({ ...p }))
-        }))
-      ])
-      return prev
-    })
+    setHistory(h => [
+      ...h.slice(-49),
+      curvesRef.current.map(c => ({
+        ...c,
+        pts: c.pts.map(p => ({ ...p })),
+        origPts: c.origPts?.map(p => ({ ...p }))
+      }))
+    ])
   }, [])
 
   const undo = useCallback(() => {
-    setHistory(prev => {
-      if (!prev.length) return prev
-      setCurves(prev[prev.length - 1])
-      return prev.slice(0, -1)
+    setHistory(h => {
+      if (!h.length) return h
+      const restored = h[h.length - 1]
+      setCurves(restored)          // batched with setHistory by React 18
+      return h.slice(0, -1)
     })
   }, [])
+
+  // Keyboard shortcut — must be declared after undo to avoid TDZ
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo])
 
   const updateCurvePts = useCallback((i, pts) => {
     setCurves(prev => prev.map((c, idx) => idx === i ? { ...c, pts } : c))
@@ -422,9 +424,6 @@ export default function App() {
               curves={curves}
               activeCurveIdx={activeCurveIdx}
               xRange={{ xFrom, xTo }}
-              brushRadius={brushRadius}
-              weightKind={weightKind}
-              onUpdateCurve={updateCurvePts}
             />
           </div>
         </div>
