@@ -185,6 +185,18 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [undo])
 
+  // When calibration or scale changes, recompute x/y for all stored pts
+  // so PreviewChart and export always reflect the current transform.
+  useEffect(() => {
+    if (!isCalibrationComplete(cal)) return
+    const t = makeTransform(cal, xScale)
+    setCurves(prev => prev.map(c => ({
+      ...c,
+      pts: c.pts.map(p => ({ ...p, x: t.pxToX(p.px), y: t.pxToY(p.py) })),
+      origPts: c.origPts?.map(p => ({ ...p, x: t.pxToX(p.px), y: t.pxToY(p.py) }))
+    })))
+  }, [cal, xScale])
+
   const updateCurvePts = useCallback((i, pts) => {
     setCurves(prev => prev.map((c, idx) => idx === i ? { ...c, pts } : c))
   }, [])
