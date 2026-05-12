@@ -26,7 +26,10 @@ export default function PreviewChart({ curves, activeCurveIdx, xRange, height = 
       return
     }
 
-    const { xFrom, xTo } = xRange
+    const allX = []
+    curves.forEach(c => c.visible && c.pts.forEach(p => allX.push(p.x)))
+    const xFrom = allX.length ? Math.min(...allX) : (xRange.xFrom ?? 0)
+    const xTo   = allX.length ? Math.max(...allX) : (xRange.xTo   ?? 1)
     const yMin = Math.min(...allY)
     const yMax = Math.max(...allY)
     const yPad = (yMax - yMin) * 0.1 || 1
