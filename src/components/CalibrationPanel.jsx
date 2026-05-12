@@ -1,3 +1,43 @@
+import { useState, useEffect } from 'react'
+
+// Local-state input: lets the user type freely (including '-', '3.', '-0.')
+// and only propagates a parsed number to the parent when the value is valid.
+// On blur, if the text is not a valid number it reverts to the last known value.
+function NumInput({ value, onChange, placeholder, className }) {
+  const [text, setText] = useState(value != null && !isNaN(value) ? String(value) : '')
+
+  // Sync display when parent value changes from outside (e.g. pixel-pick sets it)
+  useEffect(() => {
+    if (value != null && !isNaN(value)) setText(String(value))
+  }, [value])
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      placeholder={placeholder}
+      onChange={e => {
+        const raw = e.target.value
+        setText(raw)
+        const n = parseFloat(raw)
+        if (!isNaN(n)) onChange(n)
+      }}
+      onBlur={() => {
+        const n = parseFloat(text)
+        if (isNaN(n)) {
+          // restore to last valid parent value
+          setText(value != null && !isNaN(value) ? String(value) : '')
+        } else {
+          setText(String(n))
+          onChange(n)
+        }
+      }}
+      className={className}
+    />
+  )
+}
+
 export default function CalibrationPanel({
   cal,
   xScale,
@@ -9,7 +49,6 @@ export default function CalibrationPanel({
 }) {
   const setCount = ['x1', 'x2', 'y1', 'y2'].filter(k => cal[k]).length
 
-  // Pixel input: small number field
   const PxInput = ({ label, value, onChange }) => (
     <div className="flex items-center gap-1">
       <span className="text-[10px] text-gray-400 w-3 shrink-0">{label}</span>
@@ -29,17 +68,14 @@ export default function CalibrationPanel({
         const isX = k.startsWith('x')
         return (
           <div key={k} className="space-y-1.5">
-            {/* Data value row */}
             <div className="flex items-center justify-between">
               <label className="text-xs text-gray-500 font-medium">{k.toUpperCase()} 值</label>
               {cal[k] && <span className="text-[10px] text-green-600">✓</span>}
             </div>
             <div className="flex gap-1">
-              <input
-                type="number"
-                step="any"
-                value={cal[k]?.val ?? ''}
-                onChange={e => onUpdateCalValue(k, parseFloat(e.target.value))}
+              <NumInput
+                value={cal[k]?.val}
+                onChange={n => onUpdateCalValue(k, n)}
                 placeholder={k === 'x1' ? '2000' : k === 'x2' ? '8000' : k === 'y1' ? '0' : '11'}
                 className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -55,7 +91,6 @@ export default function CalibrationPanel({
               </button>
             </div>
 
-            {/* Pixel coordinate inputs — shown once point is set */}
             {cal[k] && (
               <div
                 className={`rounded p-1.5 space-y-1 border ${
@@ -120,7 +155,7 @@ export default function CalibrationPanel({
       <CalRow k1="y1" k2="y2" />
 
       <p className="text-[11px] text-gray-500 leading-relaxed">
-        先輸入數值，再點「<span className="font-medium">點選</span>」並在圖上點擊對應位置。點擊後可在「像素位置」欄手動微調 X/Y 像素座標。
+        先輸入數值（支援負數），再點「<span className="font-medium">點選</span>」並在圖上點擊對應位置。點擊後可在「像素位置」欄手動微調 X/Y 像素座標。
       </p>
     </div>
   )

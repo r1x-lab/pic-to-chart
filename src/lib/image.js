@@ -9,9 +9,10 @@ function colorDist(r, g, b, tr, tg, tb) {
 export function extendToRange(pts, xMin, xMax, transform) {
   const lo = Math.round(xMin)
   const hi = Math.round(xMax)
-  const zeroPy = transform.yToPy(0)
 
   if (!pts.length) {
+    // No trace at all — fill with y=0 as a neutral placeholder
+    const zeroPy = transform.yToPy(0)
     return Array.from({ length: hi - lo + 1 }, (_, i) => {
       const px = lo + i
       return { px, py: zeroPy, x: transform.pxToX(px), y: 0 }
@@ -19,16 +20,19 @@ export function extendToRange(pts, xMin, xMax, transform) {
   }
 
   const sorted = [...pts].sort((a, b) => a.px - b.px)
-  const firstPx = sorted[0].px
-  const lastPx  = sorted[sorted.length - 1].px
+  const first = sorted[0]
+  const last  = sorted[sorted.length - 1]
 
+  // Extend flat from the boundary traced point so the sign is preserved.
+  // e.g. a return-loss curve at -5 dB at the left edge stays at -5 dB,
+  // not artificially jumps to 0.
   const left = []
-  for (let px = lo; px < firstPx; px++)
-    left.push({ px, py: zeroPy, x: transform.pxToX(px), y: 0 })
+  for (let px = lo; px < first.px; px++)
+    left.push({ px, py: first.py, x: transform.pxToX(px), y: first.y })
 
   const right = []
-  for (let px = lastPx + 1; px <= hi; px++)
-    right.push({ px, py: zeroPy, x: transform.pxToX(px), y: 0 })
+  for (let px = last.px + 1; px <= hi; px++)
+    right.push({ px, py: last.py, x: transform.pxToX(px), y: last.y })
 
   return [...left, ...sorted, ...right]
 }
